@@ -14,7 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 
 ldap_name  = 'LDAP NAME'
-ldap_pwd  = 'LDAP PWD
+ldap_pwd  = 'LDAP PWD'
 passkey = 'Xlf8G5108wADIS43a5irWi0y51Kv8Ph3' # for ICEBREAKER API
 
 # locale lists of strings
