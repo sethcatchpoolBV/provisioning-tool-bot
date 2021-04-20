@@ -4,6 +4,7 @@ import os
 import time
 import requests
 import cgi
+from python_hmac_auth import HmacAuth
 from collections import OrderedDict
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -13,7 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 
 ldap_name  = 'LDAP NAME'
-ldap_pwd  = 'LDAP PWD'
+ldap_pwd  = 'LDAP PWD
 passkey = 'Xlf8G5108wADIS43a5irWi0y51Kv8Ph3' # for ICEBREAKER API
 
 # locale lists of strings
@@ -66,6 +67,20 @@ def getURL(locale):
         return "https://tryitsampling.com"
     if locale == "en_GB":
         return "https://uk.tryitsampling.com"
+    if locale == "de_DE":
+        return "https://de.tryitsampling.com"
+    if locale == "fr_FR":
+        return "https://fr.tryitsampling.com"
+
+def getTryIt(locale):
+    if locale == "en_US":
+        return "tryit"
+    if locale == "en_GB":
+        return "tryitemea"
+    if locale == "de_DE":
+        return "tryitde"
+    if locale == "fr_FR":
+        return "tryitfr"
 
 # selenium script to check the checkbox
 def tryItSampling(locale):
@@ -73,7 +88,7 @@ def tryItSampling(locale):
     try:
         options = Options()
         options.headless = True
-        driver = webdriver.Chrome(executable_path='/Users/karolis.siaulys/Documents/provisioning-tool-bot/chromedriver_win32/chromedriver',chrome_options=options)
+        driver = webdriver.Chrome(executable_path='/Users/karolis.siaulys/Downloads/Karolis/provisioning-tool-bot/chromedriver_win32/chromedriver',chrome_options=options)
         driver.get(getURL(locale))
         element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '/html/body/div[1]/div[2]/section[1]/aside[1]/section/p/button')))
         driver.find_element(By.XPATH, "/html/body/div[1]/div[2]/section[1]/aside[1]/section/p/button").click()
@@ -87,13 +102,15 @@ def tryItSampling(locale):
         driver.execute_script('arguments[0].click();',element)
         element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="nav"]/div[2]/ul/li[5]/ul/li[1]/a')))
         driver.execute_script('arguments[0].click();',element)
-        element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="item-list_filter"]/label/input')))
+        element = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//*[@id="item-list_filter"]/label/input')))
         print('"'+vendor+'"')
         driver.find_element(By.XPATH, '//*[@id="item-list_filter"]/label/input').send_keys(vendor)
         # element = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, '//*[@id="item-list_filter"]/span/button')))
         # driver.execute_script('arguments[0].click();',element)
-        element = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//*[@id="item-list"]/tbody/tr/td[2]/a')))
+        element = WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, '//*[@id="item-list"]/tbody/tr/td[2]/a')))
         driver.execute_script('arguments[0].click();',element)
+        vendorId = driver.current_url.split("/")[6]
+        #updateRosetta(locale, clientName, vendorId)
         element = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//input[@value='"+clientName+"']")))
         driver.execute_script('arguments[0].click();',element)
         element = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, '//*[@id="register_form"]/article[2]/section/div/div/button')))
@@ -102,6 +119,36 @@ def tryItSampling(locale):
         flag = True
     finally:
         return flag
+
+
+#Update instances for vendors in rosetta
+def updateRosetta(locale, clientName, vendorID):
+    print('VendorID: "'+vendorID+'"')
+    tryItLocale = getTryIt(locale)
+    url = "https://rosetta.prod.us-east-1.nexus.bazaarvoice.com/record/1/clients/"+clientName+"/services/sampling"
+    #url = 'https://rosetta.prod.us-east-1.nexus.bazaarvoice.com/scan/2/record/clients?q=services.sampling.active:boolean(true)&q=services.sampling.data.portals.client:samsclub&q=services.sampling.data.portals.brandId:6864&key=services.sampling.data&key=instanceName'
+    print(url)
+    #headers = {'content-type': 'application/json', 'X-Auth-Version': 2, 'X-Auth-Timestamp': '2021-04-01T12:59:24.064Z', 'X-Auth-Signature': }
+    headers = {'content-type': 'application/json', 'X-Auth-Version': '3'}
+    print("headeriai aprasyti")
+    putObj = {
+        "active": True,
+        "portals": [{
+            "samplingVersion": 1,
+            "brandId": vendorID,
+            "client": tryItLocale
+        }]
+    }
+    print("putObj aprasytas")
+    rosettaUpdate = requests.put(url, data=json.dumps(putObj), headers=headers, auth=HmacAuth('2830e633-8801-11eb-904b-0a58a9feac2a', 'KB4jqbOl73DJ8rcpeiSy4Q'))
+    #rosettaUpdate = requests.get(url)
+    print("requestas")
+    if rosettaUpdate.status_code == requests.codes.ok:
+        print('Rosetta updated')
+    else:
+        print('Rosetta failed to Update')
+        print(rosettaUpdate.status_code)
+
 
 # Function to run CMD command to upload new file
 def uploadConfig(config):
@@ -112,18 +159,18 @@ def uploadConfig(config):
 def appendNewDataCV2(locale, config):
     confNoBrands = '"brands": {'+clientName+': {"public_company_name": '+clientName+',"bv_client_id": '+clientName+',"deployment_zone": "ProductSampling","bv_api_prod": "//display.ugc.bazaarvoice.com/static/'+clientName+'/ProductSampling/'+locale+'/bvapi.js","bv_api_passkey_production": '+apiKey+',"encoding_key": '+encKey+'}}'
     confBrands = '{"'+clientName+'": {"public_company_name": "'+clientName+'","bv_client_id": "'+clientName+'","deployment_zone": "ProductSampling","bv_api_prod": "//display.ugc.bazaarvoice.com/static/'+clientName+'/ProductSampling/'+locale+'/bvapi.js","bv_api_passkey_production": "'+apiKey+'","encoding_key": "'+encKey+'"}}'
-    with open("/Users/karolis.siaulys/Documents/provisioning-tool-bot/"+config+"_config.json") as f:
+    with open("/Users/karolis.siaulys/Downloads/Karolis/provisioning-tool-bot/"+config+"_config.json") as f:
         data = json.load(f, object_pairs_hook=OrderedDict)
     if not data.get(clientName):
         if not data.get("brands"):
             y = json.loads(confNoBrands)
             data.update(y)
-            with open('/Users/karolis.siaulys/Documents/provisioning-tool-bot/'+config+'_config.json', 'w') as f:
+            with open('/Users/karolis.siaulys/Downloads/Karolis/provisioning-tool-bot/'+config+'_config.json', 'w') as f:
                 json.dump(data, f, indent=4)
         else:
             y = json.loads(confBrands, object_pairs_hook=OrderedDict)
             data["brands"].update(y)
-            with open('/Users/karolis.siaulys/Documents/provisioning-tool-bot/'+config+'_config.json', 'w') as f:
+            with open('/Users/karolis.siaulys/Downloads/Karolis/provisioning-tool-bot/'+config+'_config.json', 'w') as f:
                 json.dump(data, f, indent=4)
 
 def getConfig(locale):
@@ -140,7 +187,7 @@ def getConfig(locale):
 def downloadConfig(config):
     os.system('goldrush-config -c '+config+' -e production -d '+config+'_config.json')
     try:
-        f = open("/Users/karolis.siaulys/Documents/provisioning-tool-bot/"+config+"_config.json")
+        f = open("/Users/karolis.siaulys/Downloads/Karolis/provisioning-tool-bot/"+config+"_config.json")
     except IOError:
         return False
     finally:
@@ -158,7 +205,7 @@ def processData():
         if downloadConfig(config):
             appendNewDataCV2(localeSplit[i], config)
             uploadConfig(config)
-            if localeSplit[i] in ["en_GB","en_US"]:
+            if localeSplit[i] in ["en_GB","en_US", "de_DE", "fr_FR"]:
                 print ("Portal checkbox checking")
                 if not tryItSampling(localeSplit[i]):
                     ok = False
